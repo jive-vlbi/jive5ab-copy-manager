@@ -1,0 +1,63 @@
+{
+    "local_flexbuff": [
+        {
+            "user": null,
+            "machine": "aribox",
+            "port": 2620,
+            "control_ip": "10.88.0.24",
+            "data_ip": "192.42.120.101",
+            "machine_type": "flexbuff"
+        },
+        {
+            "user": "jops",
+            "machine": "flexbuf0",
+            "port": 2620,
+            "control_ip": "10.88.0.25",
+            "data_ip": "192.42.120.68",
+            "machine_type": "flexbuff"
+        }
+    ],
+    "remote_flexbuff": [
+        {
+            "user": "oper",
+            "machine": "bogar.oso.chalmers.se",
+            "port": 2621,
+            "control_ip": "129.16.208.145",
+            "data_ip": "129.16.208.145",
+            "machine_type": "flexbuff",
+            "station": "On"
+        }
+    ],
+    "mark5": [
+        {
+            "machine": "0",
+            "control_ip": "10.88.0.50",
+            "data_ip": "192.42.120.2",
+            "port": 2620
+        }
+    ],
+    "file": [
+        {
+            "user": null,
+            "machine": "aribox",
+            "port": 2620,
+            "control_ip": "10.88.0.24",
+            "data_ip": "192.42.120.101"
+        },
+        {
+            "user": "jops",
+            "machine": "flexbuf0",
+            "port": 2620,
+            "control_ip": "10.88.0.25",
+            "data_ip": "192.42.120.68"
+        },
+        {
+            "user": "jops",
+            "machine": "0",
+            "control_ip": "10.88.0.50",
+            "data_ip": "192.42.120.2",
+            "port": 2620
+        }
+    ]
+}
+                       
