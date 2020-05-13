@@ -183,7 +183,7 @@ class Abstract_Machine_View(QtGui.QWidget):
             
         load_item = QtGui.QTreeWidgetItem(root)
         load_item.setFirstColumnSpanned(True)
-        load_item.setText(0 , "Loading")
+        load_item.setText(0, "Loading")
 
         thread = Target_Thread(compute_func, self)
         if isinstance(root, QtGui.QTreeWidget):

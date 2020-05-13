@@ -50,7 +50,8 @@ class Mark5_View(Abstract_Machine_View):
             self.mark5.control_ip, 
             [("mk5://{host}:{port}/{bank}/".format(
                 host=self.mark5.control_ip, port=self.mark5.port, bank=bank), 
-              scan) for (bank, (number, scan)) in selection])
+              str(number) if scan in self.duplicate_recording[bank] else scan) 
+             for (bank, (number, scan)) in selection])
 
 
     def _get_m5copy_to(self):
@@ -78,6 +79,7 @@ class Mark5_View(Abstract_Machine_View):
         self.banks = {bank : Tree_Widget_Item(self.view) \
                       for bank in ["A", "B"]}
         self.recording_sizes = {bank : {} for bank in self.banks.keys()}
+        self.duplicate_recording = {bank: set() for bank in self.banks.keys()}
         for bank, item in self.banks.items():
             item.setText(self.header_labels.index("Bank"), bank)
 
@@ -150,6 +152,7 @@ class Mark5_View(Abstract_Machine_View):
             data.size = int(dir_info[3])
 
             data.scans = []
+            seen = set()
             for scan_index in xrange(scans):
                 execute_query(s, "scan_set={i}".format(i=scan_index+1), 
                               ["0"])
@@ -159,6 +162,10 @@ class Mark5_View(Abstract_Machine_View):
                 bytes_ = int(reply[5]) - int(reply[4])
                 self.recording_sizes[bank][number] = bytes_
                 data.scans.append((recording, bytes_))
+                if recording in seen:
+                    self.duplicate_recording[bank].add(recording)
+                else:
+                    seen.add(recording)
 
     def _expand_disk(self, index):
         bank = str(self.view.itemFromIndex(index).text(

@@ -95,7 +95,7 @@ class Text_Edit_Dialog(QDialog):
         button_box.accepted.connect(self.accept)
         layout.addWidget(button_box)
 
-def get_flexbuff_meta_data(check):
+def get_flexbuff_meta_data(check, is_mark6_data_format=False):
     """
     Check: a list of flexbuff machines to check
     Returns a 3-tuple (usage, available, errors)
@@ -105,7 +105,7 @@ def get_flexbuff_meta_data(check):
       { flexbuff : [sum of disk sizes in bytes, sum of bytes used over 
                     all disks, sum of bytes available over all disks] }
     errors = { flexbuff : { mount point : [recordings] } }
-    """ 
+    """
     threads = []
     # [ FLEXBUF ][ EXP ][ STATION ][ SCAN ] = <number>
     usage = collections.defaultdict(
@@ -120,7 +120,9 @@ def get_flexbuff_meta_data(check):
             args=(flexbuff, 
                   usage[flexbuff.machine], 
                   available[flexbuff.machine], 
-                  errors[flexbuff.machine]))
+                  errors[flexbuff.machine],
+                  None,
+                  is_mark6_data_format))
         thread.start()
         threads.append(thread)
 
@@ -129,7 +131,8 @@ def get_flexbuff_meta_data(check):
 
     return (usage, available, errors)
 
-def check_flexbuff(flexbuff, usage, available, errors, recording_name=None):
+def check_flexbuff(flexbuff, usage, available, errors, recording_name=None,
+                   is_mark6_data_format=False):
     """
     if recording_name:
      usage has to be a dict, it will be filled in with {chunk path: size}
@@ -139,76 +142,96 @@ def check_flexbuff(flexbuff, usage, available, errors, recording_name=None):
      {experiment: {station: {(scan, recording): size}}}
     """
     try:
-        # disk usage
-        process = subprocess.Popen(
-            args=shlex.split(
-                "ssh -o PasswordAuthentication=no {flexbuff} "
-                "\"bash -c 'echo {p}/{r} | "
-                "xargs du -b -s --exclude lost+found/'\"".\
-                format(
-                    p=disk_pattern[flexbuff.machine_type],
-                    r=(os.path.join(recording_name, recording_name) + ".*")\
-                      if recording_name else "*/",
-                    flexbuff=flexbuff.machine if flexbuff.user is None \
-                    else "@".join([flexbuff.user, flexbuff.machine]))),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
-        (output, error) = process.communicate()
-        returncode = process.wait()
-        if returncode != 0:
-            if returncode not in [1, 123]:
-                # return code of du when encoutering disk problems (123)
-                # or permission problems (1)
-                raise RuntimeError("du failed with return code {r}".format(
-                    r=returncode))
-            for line in error.split('\n'):
-                if line == "":
-                    continue
-                match = du_error_regexp[flexbuff.machine_type].match(line)
-                if match:
-                    errors[match.group("disk")].append(match.group("recording"))
-        
-        recording_regex = re.compile("^(?P<bytes>\d+)\s+(?P<recording>\S+)\s*$")
-        for line in output.split('\n'):
-            if line == "":
-                continue
-            match = recording_regex.match(line)
-            if match:
-                size = int(match.group("bytes"))
-                if recording_name:
-                    path = match.group("recording")
-                    usage[path] = size
-                else:
-                    # recording is last directory
-                    recording = os.path.split(
-                        os.path.split(match.group("recording"))[0])[1]
-                    split = recording.split("_")
-                    (experiment, station, scan) = \
-                        (split[0].upper(), 
-                         split[1].capitalize(), 
-                         "_".join(split[2:])) \
-                         if len(split)>=3 \
-                         else (None, None, None)
-                    usage[experiment][station][(scan, recording)] += size
-            else:
-                raise RuntimeError(
-                    "Unexpected line on du output: '{line}'".format(line=line))
-                    
+        check_flexbuff_usage(flexbuff, usage, errors, recording_name, 
+                             is_mark6_data_format)
         if not recording_name:
-            # disk space available
-            output = subprocess.check_output(
-                shlex.split("ssh -o PasswordAuthentication=no {flexbuff} "
-                            "\"bash -c 'df -B 1 --total /mnt/disk*'\"".format(
-                                flexbuff=flexbuff.machine \
-                                if flexbuff.user is None else \
-                                "@".join([flexbuff.user, flexbuff.machine]))))
-            regex = re.compile("^total\s+(?P<total>\d+)\s+(?P<used>\d+)\s+(?P<available>\d+)\s+\d+%")
-            for line in output.split('\n'):
-                match = regex.match(line)
-                if match:
-                    available[:] = [int(match.group("total")),
-                                    int(match.group("used")),
-                                    int(match.group("available"))]
+            check_flexbuff_availability(flexbuff, available)
 
     except Exception as e:
-        print "{f}: {e}".format(f = flexbuff.machine, e = e)
+        print "{f}: {e}".format(f=flexbuff.machine, e=e)
+
+def check_flexbuff_usage(flexbuff, usage, errors, recording_name, 
+                         is_mark6_data_format):
+    find_type = "f"
+    if recording_name is not None:
+        depth = 0
+        if is_mark6_data_format:
+            recording_path = recording_name
+        else:
+            recording_path = (os.path.join(recording_name, recording_name) + 
+                              ".*")
+    else:
+        depth = 1
+        if not is_mark6_data_format:
+            find_type = "d"
+        recording_path = ""
+
+    process = subprocess.Popen(
+        args=shlex.split(
+            "ssh -o PasswordAuthentication=no {flexbuff} "
+            "\"bash -c 'find {p}/{r}  -mindepth {d}  -maxdepth {d} -type {t} | "
+            "xargs du -b -s --exclude lost+found/'\"".\
+            format(
+                p=disk_pattern[flexbuff.machine_type],
+                r=recording_path,
+                d=depth,
+                t=find_type,
+                flexbuff=flexbuff.machine if flexbuff.user is None \
+                else "@".join([flexbuff.user, flexbuff.machine]))),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE)
+    (output, error) = process.communicate()
+    returncode = process.wait()
+    if returncode != 0:
+        if returncode not in [1, 123]:
+            # return code of du when encoutering disk problems (123)
+            # or permission problems (1)
+            raise RuntimeError("du failed with return code {r}".format(
+                r=returncode))
+        for line in error.split('\n'):
+            if line == "":
+                continue
+            match = du_error_regexp[flexbuff.machine_type].match(line)
+            if match:
+                errors[match.group("disk")].append(match.group("recording"))
+
+    recording_regex = re.compile("^(?P<bytes>\d+)\s+(?P<recording>\S+)\s*$")
+    for line in output.split('\n'):
+        if line == "":
+            continue
+        match = recording_regex.match(line)
+        if match:
+            size = int(match.group("bytes"))
+            if recording_name:
+                path = match.group("recording")
+                usage[path] = size
+            else:
+                recording = os.path.split(match.group("recording"))[1]
+                split = recording.split("_")
+                (experiment, station, scan) = \
+                    (split[0].upper(), 
+                     split[1].capitalize(), 
+                     "_".join(split[2:])) \
+                     if len(split)>=3 \
+                     else (None, None, None)
+                usage[experiment][station][(scan, recording)] += size
+        else:
+            raise RuntimeError(
+                "Unexpected line on du output: '{line}'".format(line=line))
+
+def check_flexbuff_availability(flexbuff, available):
+    # disk space available
+    output = subprocess.check_output(
+        shlex.split("ssh -o PasswordAuthentication=no {flexbuff} "
+                    "\"bash -c 'df -B 1 --total /mnt/disk*'\"".format(
+                        flexbuff=flexbuff.machine \
+                        if flexbuff.user is None else \
+                        "@".join([flexbuff.user, flexbuff.machine]))))
+    regex = re.compile("^total\s+(?P<total>\d+)\s+(?P<used>\d+)\s+"
+                       "(?P<available>\d+)\s+\d+%")
+    for line in output.split('\n'):
+        match = regex.match(line)
+        if match:
+            available[:] = [int(match.group("total")),
+                            int(match.group("used")),
+                            int(match.group("available"))]

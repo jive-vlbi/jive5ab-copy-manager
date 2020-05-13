@@ -2,6 +2,7 @@ from shared import get_flexbuff_meta_data, check_flexbuff, format_bytes
 from import_proxy import execute_query, send_query, Hashable_Bunch
 from abstract_machine_view import (Invalid_Selection_Exception, 
                                    Abstract_Machine_View, Tree_Widget_Item)
+import rename_widget
 
 
 import PyQt4.QtGui as QtGui
@@ -132,7 +133,7 @@ class Flexbuff_View(Abstract_Machine_View):
         text = ""
         flexbuffs = set(flexbuff for (flexbuff, _) in selection)
         for fb in flexbuffs:
-            with contextlib.closing(self._create_socket(fb)) as s:
+            with contextlib.closing(self._create_socket(fb, timeout=60)) as s:
                 flexbuff_recordings = [data.recording for (flexbuff, data) \
                                        in selection if flexbuff == fb]
                 for recording in flexbuff_recordings:
@@ -162,9 +163,10 @@ class Flexbuff_View(Abstract_Machine_View):
             return
 
         flexbuffs = set(fb.machine for (fb, _) in selection)
-            
+        data_format = "mk6" if self.mark6_format.isChecked() else "vbs"
         self.copy_from.emit(", ".join(flexbuffs),
-                            [("vbs://{host}:{port}/{type_}/".format(
+                            [("{data}://{host}:{port}/{type_}/".format(
+                                data=data_format,
                                 host=flexbuff.machine,
                                 port=flexbuff.port,
                                 type_=disk_selection(flexbuff)),
@@ -181,9 +183,11 @@ class Flexbuff_View(Abstract_Machine_View):
                 "FlexBuff has to be empty as copying to a specific "
                 "destination is not supported.")
         flexbuff = self.flexbuffs.values()[0]
-        return (flexbuff.machine, "vbs://{host}:{port}:{data_ip}/{type_}/".
+        data_format = "mk6" if self.mark6_format.isChecked() else "vbs"
+        return (flexbuff.machine, "{data}://{host}:{port}:{data_ip}/{type_}/".
 
-                format(host=flexbuff.control_ip, 
+                format(data=data_format,
+                       host=flexbuff.control_ip, 
                        port=flexbuff.port, 
                        data_ip=flexbuff.data_ip,
                        type_=disk_selection(flexbuff)))
@@ -194,7 +198,14 @@ class Flexbuff_View(Abstract_Machine_View):
     def _display_data(self):
         data = self.background_data[self.view]
 
-        self.disk_usage_layout.takeAt(0).widget().deleteLater()
+        # clear the disk usage layout
+        while True:
+            item = self.disk_usage_layout.takeAt(0)
+            if not item:
+                break
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
         for index, text in enumerate(["Total", "Used", "Free"]):
             if index > 0:
                 self.disk_usage_layout.addStretch(1)
@@ -265,12 +276,15 @@ class Flexbuff_View(Abstract_Machine_View):
                                       [station][(scan, recording)]))
 
         self.view.collapseAll()
-        
+        self.mark6_format.setEnabled(True)
+
+
     def _get_data(self):
         data = self.background_data[self.view]
 
+        is_mark6_data_format = self.mark6_format.isChecked()
         (data.usage, data.available, data.errors) = \
-            get_flexbuff_meta_data(self.flexbuffs.values())
+            get_flexbuff_meta_data(self.flexbuffs.values(), is_mark6_data_format)
 
         # {experiment : {station : {(scan, recording) : set(flexbuffs)}}}
         data.presence = collections.defaultdict(
@@ -302,8 +316,6 @@ class Flexbuff_View(Abstract_Machine_View):
         self.view = QtGui.QTreeWidget(widget)
         layout.addWidget(self.view)
 
-        self.load_in_background(self.view, self._get_data, self._display_data)
-        
         return widget
 
     def _create_socket(self, flexbuff, timeout=10):
@@ -311,6 +323,11 @@ class Flexbuff_View(Abstract_Machine_View):
         s.settimeout(timeout)
         s.connect((flexbuff.machine, flexbuff.port))
         return s
+
+    def _set_data_format(self):
+        self.mark6_format.setEnabled(False)
+        self.view.clear()
+        self.load_in_background(self.view, self._get_data, self._display_data)
 
     def _set_chunk_visibility(self):
         visible = self.show_file_chunks.isChecked()
@@ -359,31 +376,62 @@ class Flexbuff_View(Abstract_Machine_View):
         for flexbuff in [self.flexbuffs[machine] for machine in machines]:
             chunks = {}
             errors = {}
+            is_mark6_data_format = self.mark6_format.isChecked()
             check_flexbuff(flexbuff, chunks, None, errors,
-                self.data[experiment][station][scan].recording)
+                           self.data[experiment][station][scan].recording,
+                           is_mark6_data_format)
             
             display = set()
-            for chunk, size in chunks.items():
-                disk = chunk.split("/")[2]
-                index = chunk.split(".")[-1]
-                display.add((index, disk, size))
-                self.chunks[experiment][station][scan][index] = Hashable_Bunch(
-                    recording=chunk, size=size)
-            for (index, disk, size) in sorted(display):
-                item = Tree_Widget_Item(scan_item)
-                item.setText(self.header_labels.index("Chunk"),
-                             index + " on " + disk)
-                item.setText(self.header_labels.index("Size"),
-                             format_bytes(size, self.bytes_print_size))
-                if len(self.flexbuffs) > 1:
-                    item.setText(self.header_labels.index("FlexBuff"),
-                                 flexbuff.machine)
+            if is_mark6_data_format:
+                for chunk, size in chunks.items():
+                    disk = "/".join(chunk.split("/")[3:5])
+                    display.add((disk, size))
+                for (disk, size) in sorted(display):
+                    self.chunks[experiment][station][scan][disk] = \
+                        Hashable_Bunch(recording=chunk, size=size)
+                    item = Tree_Widget_Item(scan_item)
+                    item.setText(self.header_labels.index("Chunk"),
+                                 disk)
+                    item.setText(self.header_labels.index("Size"),
+                                 format_bytes(size, self.bytes_print_size))
+                    if len(self.flexbuffs) > 1:
+                        item.setText(self.header_labels.index("FlexBuff"),
+                        flexbuff.machine)
+            else:
+                for chunk, size in chunks.items():
+                    disk = chunk.split("/")[2]
+                    index = chunk.split(".")[-1]
+                    display.add((index, disk, size))
+                    self.chunks[experiment][station][scan][index] = \
+                        Hashable_Bunch(recording=chunk, size=size)
+                for (index, disk, size) in sorted(display):
+                    item = Tree_Widget_Item(scan_item)
+                    item.setText(self.header_labels.index("Chunk"),
+                                 index + " on " + disk)
+                    item.setText(self.header_labels.index("Size"),
+                                 format_bytes(size, self.bytes_print_size))
+                    if len(self.flexbuffs) > 1:
+                        item.setText(self.header_labels.index("FlexBuff"),
+                        flexbuff.machine)
 
         self.expanded.add(scan_item)
         
     def _get_m5copy_options(self):
         return super(Flexbuff_View, self)._get_m5copy_options() + \
             (" -p 4000" if self.local else "")
+
+    def _rename(self):
+        selection = self._get_selection()
+
+        # make the base widget the parent, such that the dialog lives on and
+        # is centered properly
+        grandparent = self
+        while grandparent.parentWidget():
+            grandparent = grandparent.parentWidget()
+
+        dialog = rename_widget.Rename_Dialog(selection, grandparent)
+        dialog.show()
+        dialog.raise_()
 
     def __init__(self, (flexbuffs, local), parent=None):
         if not flexbuffs:
@@ -393,9 +441,15 @@ class Flexbuff_View(Abstract_Machine_View):
 
         super(Flexbuff_View, self).__init__(parent)
 
+        self.mark6_format = QtGui.QCheckBox("Mark6 format", self)
+        self.selection_layout.addWidget(self.mark6_format)
+        self.mark6_format.clicked.connect(self._set_data_format)
+        self.mark6_format.setEnabled(False)
+
         self.show_file_chunks = QtGui.QCheckBox("Show file chunks", self)
         self.selection_layout.addWidget(self.show_file_chunks)
         self.show_file_chunks.clicked.connect(self._set_chunk_visibility)
+
         self.view.expanded.connect(self._expand_scan)
         self.expanded = set()
         self.view.hideColumn(self.header_labels.index("Chunk"))
@@ -405,5 +459,12 @@ class Flexbuff_View(Abstract_Machine_View):
         
         if len(self.flexbuffs) == 1:
             self.view.hideColumn(self.header_labels.index("FlexBuff"))
+
+        self.rename_action = QtGui.QAction("Rename", self)
+        self.rename_action.triggered.connect(self._rename)
+        self.view.addAction(self.rename_action)
+
+        self.load_in_background(self.view, self._get_data, self._display_data)
+        
 
 
