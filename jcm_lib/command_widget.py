@@ -1,20 +1,13 @@
-from shared import Text_Edit_Dialog
+from .shared import Text_Edit_Dialog
 
-import PyQt4.QtGui as QtGui
-import PyQt4.QtCore as QtCore
-
-# fix bug of QWIDGETSIZE_MAX not being exported on some versions of Qt
-try:
-    QtGui.QWIDGETSIZE_MAX
-except AttributeError:
-    QtGui.QWIDGETSIZE_MAX = ((1 << 24) - 1)
+from PyQt5 import QtGui, QtCore, QtWidgets
 
 import subprocess
 import shlex
 import signal
 import os
 
-class Message_Box_Resize(QtGui.QMessageBox):
+class Message_Box_Resize(QtWidgets.QMessageBox):
     """
     Default QMessageBox is not resizeable, 
     this is a bit hackish way around that.
@@ -27,10 +20,10 @@ class Message_Box_Resize(QtGui.QMessageBox):
         self.details_button = None
 
     def allow_resize(self):
-        self.setMaximumSize(QtGui.QWIDGETSIZE_MAX, QtGui.QWIDGETSIZE_MAX)
-        text_edit = self.findChild(QtGui.QTextEdit)
+        self.setMaximumSize(QtWidgets.QWIDGETSIZE_MAX, QtWidgets.QWIDGETSIZE_MAX)
+        text_edit = self.findChild(QtWidgets.QTextEdit)
         if text_edit:
-            text_edit.setMaximumHeight(QtGui.QWIDGETSIZE_MAX)
+            text_edit.setMaximumHeight(QtWidgets.QWIDGETSIZE_MAX)
 
     def event(self, e):
         res = super(Message_Box_Resize, self).event(e)
@@ -44,7 +37,7 @@ class Message_Box_Resize(QtGui.QMessageBox):
         res = super(Message_Box_Resize, self).showEvent(e)
         if (self.details_button is None):
             for button in self.buttons():
-                if (self.buttonRole(button) == QtGui.QMessageBox.ActionRole \
+                if (self.buttonRole(button) == QtWidgets.QMessageBox.ActionRole \
                     and \
                     button.text() == self.tr("Show Details...")):
                     self.details_button = button;
@@ -62,13 +55,13 @@ class Message_Box_Resize(QtGui.QMessageBox):
             self.resize(size)
             
 
-class Command_Progress_Widget(QtGui.QWidget):
+class Command_Progress_Widget(QtWidgets.QWidget):
     def __init__(self, total_commands, parent=None):
         super(Command_Progress_Widget, self).__init__(parent)
-        self.layout = QtGui.QVBoxLayout(self)
+        self.layout = QtWidgets.QVBoxLayout(self)
 
-        self.label_layout = QtGui.QHBoxLayout()
-        self.command_label = QtGui.QLabel(self)
+        self.label_layout = QtWidgets.QHBoxLayout()
+        self.command_label = QtWidgets.QLabel(self)
         self.label_layout.addWidget(self.command_label)
         self.layout.addLayout(self.label_layout)
         self.total_commands = total_commands
@@ -81,7 +74,7 @@ class Command_Progress_Widget(QtGui.QWidget):
     def process_output(self, text):
         pass
 
-class Command_Dialog(QtGui.QDialog):
+class Command_Dialog(QtWidgets.QDialog):
     """
     Abstract class, subclasses should define:
     - self.command, as the shell command to execute.
@@ -124,7 +117,7 @@ class Command_Dialog(QtGui.QDialog):
         self._continue = True
         self.progress_widget = self.progress_display_class(
             len(str(self.commands_widget.toPlainText()).split("\n")), self)
-        self.stop_button = QtGui.QPushButton("Stop on next", self)
+        self.stop_button = QtWidgets.QPushButton("Stop on next", self)
         self.stop_button.setCheckable(True)
         # replace stretch with the progress widget and stop on next button
         self.control_layout.takeAt(0)
@@ -135,7 +128,7 @@ class Command_Dialog(QtGui.QDialog):
 
     def _set_command_line_format(self, line_number, format_):
         self.commands_widget.moveCursor(QtGui.QTextCursor.Start)
-        for i in xrange(line_number):
+        for i in range(line_number):
             self.commands_widget.moveCursor(QtGui.QTextCursor.Down)
         self.commands_widget.moveCursor(QtGui.QTextCursor.EndOfLine,
                                         QtGui.QTextCursor.KeepAnchor)
@@ -157,9 +150,9 @@ class Command_Dialog(QtGui.QDialog):
             
             # highlight current line
             self.commands_widget.moveCursor(QtGui.QTextCursor.Start)
-            for i in xrange(self._line_number):
+            for i in range(self._line_number):
                 self.commands_widget.moveCursor(QtGui.QTextCursor.Down)
-            line = QtGui.QTextEdit.ExtraSelection()
+            line = QtWidgets.QTextEdit.ExtraSelection()
             line.format.setBackground(
                 QtGui.QColor(QtCore.Qt.yellow).lighter(160))
             line.format.setProperty(QtGui.QTextFormat.FullWidthSelection, True)
@@ -177,7 +170,7 @@ class Command_Dialog(QtGui.QDialog):
             self._process.error.connect(self._process_error)
             self._process.start(command[0], command[1:])
         except Exception as e:
-            QtGui.QMessageBox.critical(self, 
+            QtWidgets.QMessageBox.critical(self, 
                                        "Failed to start {}".format(self.command),
                                        "Exception: {e}".format(e=e))
             self._process = None
@@ -190,11 +183,11 @@ class Command_Dialog(QtGui.QDialog):
 
     def _process_error(self, error):
         self.commands_widget.setExtraSelections([])
-        box = QtGui.QMessageBox(
-            QtGui.QMessageBox.Warning,
+        box = QtWidgets.QMessageBox(
+            QtWidgets.QMessageBox.Warning,
             "Command failed",
             "Failed to run {}".format(self.command),
-            QtGui.QMessageBox.Ok,
+            QtWidgets.QMessageBox.Ok,
             self)
         box.exec_()
         self._process = None
@@ -211,11 +204,11 @@ class Command_Dialog(QtGui.QDialog):
             if self._continue:
                 # only show error if it's unexpected
                 box = Message_Box_Resize(
-                    QtGui.QMessageBox.Warning,
+                    QtWidgets.QMessageBox.Warning,
                     "Command failed",
                     "{} returned an error, click for all output".format(
                         self.command),
-                    QtGui.QMessageBox.Ok,
+                    QtWidgets.QMessageBox.Ok,
                     self)
                 box.setDetailedText(''.join(self._output))
                 box.exec_()
@@ -263,7 +256,7 @@ class Command_Dialog(QtGui.QDialog):
             self._process.waitForFinished(-1)
 
     def _disconnect_stop(self):
-        QtGui.QApplication.instance().lastWindowClosed.disconnect(self.stop)
+        QtWidgets.QApplication.instance().lastWindowClosed.disconnect(self.stop)
 
     def _check_progress(self):
         if self._process:
@@ -284,29 +277,29 @@ class Command_Dialog(QtGui.QDialog):
         super(Command_Dialog, self).__init__(parent)
         self.recordings = recordings
 
-        master_layout = QtGui.QVBoxLayout(self)
+        master_layout = QtWidgets.QVBoxLayout(self)
         self.add_config_widgets(master_layout)
         
-        button_layout = QtGui.QHBoxLayout()
-        help_button = QtGui.QPushButton("Help", self)
+        button_layout = QtWidgets.QHBoxLayout()
+        help_button = QtWidgets.QPushButton("Help", self)
         button_layout.addWidget(help_button)
         help_button.clicked.connect(self._show_help)
         button_layout.addStretch(1)
-        self.apply_button = QtGui.QPushButton("Apply", self)
+        self.apply_button = QtWidgets.QPushButton("Apply", self)
         button_layout.addWidget(self.apply_button)
         self.apply_button.clicked.connect(self._display_commands)
         master_layout.addLayout(button_layout)
 
-        self.commands_widget = QtGui.QTextEdit(self)
-        self.commands_widget.setLineWrapMode(QtGui.QTextEdit.NoWrap)
+        self.commands_widget = QtWidgets.QTextEdit(self)
+        self.commands_widget.setLineWrapMode(QtWidgets.QTextEdit.NoWrap)
         master_layout.addWidget(self.commands_widget)
 
-        self.control_layout = QtGui.QHBoxLayout()
+        self.control_layout = QtWidgets.QHBoxLayout()
         self.control_layout.addStretch(1)
-        self.go_button = QtGui.QPushButton("Go", self)
+        self.go_button = QtWidgets.QPushButton("Go", self)
         self.control_layout.addWidget(self.go_button)
         self.go_button.clicked.connect(self._go_button_clicked)
-        self.cancel_button = QtGui.QPushButton("Cancel", self)
+        self.cancel_button = QtWidgets.QPushButton("Cancel", self)
         self.control_layout.addWidget(self.cancel_button)
         self.cancel_button.clicked.connect(self._cancel_button_clicked)
         
@@ -319,6 +312,6 @@ class Command_Dialog(QtGui.QDialog):
         self._process = None
 
         # make sure the process is stopped when the application is
-        QtGui.QApplication.instance().lastWindowClosed.connect(self.stop)
+        QtWidgets.QApplication.instance().lastWindowClosed.connect(self.stop)
         self.destroyed.connect(self._disconnect_stop)
 

@@ -1,11 +1,10 @@
-from import_proxy import execute_query, send_query
-from shared import format_bytes
-from abstract_machine_view import (Invalid_Selection_Exception, 
+from .import_proxy import execute_query, send_query
+from .shared import format_bytes
+from .abstract_machine_view import (Invalid_Selection_Exception, 
                                    Abstract_Machine_View, Tree_Widget_Item)
 
 
-import PyQt4.QtGui as QtGui
-import PyQt4.QtCore as QtCore
+from PyQt5 import QtWidgets, QtCore
 
 import os.path
 import subprocess
@@ -13,6 +12,7 @@ import shlex
 import re
 import contextlib
 import socket
+import itertools
 
 class File_View(Abstract_Machine_View):
     header_labels = ["File", "Size"]
@@ -44,7 +44,9 @@ class File_View(Abstract_Machine_View):
 
     def _get_m5copy_to(self):
         indices = self.view.selectedIndexes()
-        items = list(set(self.view.itemFromIndex(index) for index in indices))
+        # get unique items from indices
+        items, _ = zip(*itertools.groupby(
+            self.view.itemFromIndex(index) for index in indices))
         if (len(items) != 1) or \
            (items[0].childIndicatorPolicy() != \
            Tree_Widget_Item.ShowIndicator):
@@ -63,7 +65,7 @@ class File_View(Abstract_Machine_View):
         
 
     def _create_view_widget(self):
-        self.view = QtGui.QTreeWidget(self)
+        self.view = QtWidgets.QTreeWidget(self)
         self.root_item = Tree_Widget_Item(self.view)
         self.root_item.setText(self.header_labels.index("File"), 
                                self.args.root_path)
@@ -100,15 +102,15 @@ class File_View(Abstract_Machine_View):
         "(?P<date_time>\S+\s+\S+\s+\S+)\s+"
         "(?P<name>.+)")
     def _expand_dir(self, index):
-        expanding = self.view.itemFromIndex(index)
-        if expanding in self.expanded:
-            return
         dir_ = self._get_path(index)
+        if dir_ in self.expanded:
+            return
+        expanding = self.view.itemFromIndex(index)
         output = subprocess.check_output(shlex.split(
             "ssh -o PasswordAuthentication=no {user}{machine} ls -l {dir_}".\
             format(user=(self.args.user + "@" if self.args.user else ""),
                    machine=self.args.control_ip,
-                   dir_=dir_)))
+                   dir_=dir_))).decode()
         for line in output.split("\n")[1:]: # first line is total line
             match = self.ls_re.match(line)
             if match:
@@ -126,8 +128,8 @@ class File_View(Abstract_Machine_View):
                     self.file_sizes[os.path.join(dir_, name)] = size
                     
             else:
-                print "warning, failed to match:", line
-        self.expanded.add(expanding)
+                print("warning, failed to match:", line)
+        self.expanded.add(dir_)
         # Qt wouldn't show the scroll bar when the above actions would expand
         # the expand the size of the view beyond the viewport, 
         # resizing seems to force this to happen

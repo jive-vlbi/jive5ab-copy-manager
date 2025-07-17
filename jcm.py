@@ -1,14 +1,13 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import machine_widget
+from jcm_lib import machine_widget
 
-import PyQt4.QtGui as QtGui
-import PyQt4.QtCore as QtCore
+import PyQt5.QtWidgets as QtWidgets
+import PyQt5.QtCore as QtCore
 
-import sys
-import logging
+import logging, sys
 
-class Main_Window(QtGui.QSplitter):
+class Main_Window(QtWidgets.QSplitter):
     def __init__(self, parent=None):
         super(Main_Window, self).__init__(QtCore.Qt.Horizontal, parent)
         # two widgets to allow copying
@@ -29,7 +28,7 @@ if __name__ == "__main__":
         format="%(asctime)s - %(levelname)s - %(filename)s@%(lineno)s: "
                "%(message)s",
         level=logging.DEBUG)
-    app = QtGui.QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     window = Main_Window()
     size = window.size()
     size.setHeight(800)

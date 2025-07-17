@@ -1,5 +1,5 @@
-from bunch import Bunch, Hashable_Bunch
-import socket_util
+from .bunch import Bunch, Hashable_Bunch
+from . import socket_util
 
 import re
 import json
@@ -22,11 +22,14 @@ def split_reply(reply):
     if separator_index == -1:
         return [reply]
 
-    return map(lambda x: x.strip(), [reply[0:separator_index]] + reply[separator_index+1:].split(': '))
+    return list(map(
+        lambda x: x.strip(),
+        [reply[0:separator_index]] + reply[separator_index+1:].split(': ')))
 
 def send_query(socket, query):
-    socket_util.retry_interrupted(lambda: socket.send(query + "\n\r"))
-    reply = socket_util.retry_interrupted(lambda: socket.recv(1024))
+    socket_util.retry_interrupted(
+        lambda: socket.send((query + "\n\r").encode()))
+    reply = socket_util.retry_interrupted(lambda: socket.recv(1024)).decode()
 
     peer = socket.getpeername()
     logging.debug("send '%s' to %s:%d, reply '%s'" % (query, peer[0], peer[1], reply))

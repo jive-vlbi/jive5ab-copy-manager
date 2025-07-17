@@ -5,9 +5,9 @@ as well as within the modules on ccsbeta.
 The shared code is extracted to here, with minimal imports from other modules.
 """
 
-from PyQt4.QtCore import Qt
-from PyQt4.QtGui import QCursor, QDialog, QVBoxLayout, QTextEdit, \
-    QFontMetrics, QDialogButtonBox
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QDialogButtonBox
+from PyQt5.QtGui import QCursor, QFontMetrics
 
 import threading
 import collections
@@ -20,6 +20,11 @@ import os.path
 disk_pattern = {
     "flexbuff" : "/mnt/disk*",
     "mark6" : "/mnt/disks/*/*/data"
+}
+
+disk_re_base = {
+    "flexbuff" : "/mnt/disk\d+",
+    "mark6" : "/mnt/disks/\d+/\d+/data"
 }
 
 file_regexp = {
@@ -148,7 +153,8 @@ def check_flexbuff(flexbuff, usage, available, errors, recording_name=None,
             check_flexbuff_availability(flexbuff, available)
 
     except Exception as e:
-        print "{f}: {e}".format(f=flexbuff.machine, e=e)
+        print("{f}: {e}".format(f=flexbuff.machine, e=e))
+        import traceback; traceback.print_exc()
 
 def check_flexbuff_usage(flexbuff, usage, errors, recording_name, 
                          is_mark6_data_format):
@@ -170,7 +176,7 @@ def check_flexbuff_usage(flexbuff, usage, errors, recording_name,
         args=shlex.split(
             "ssh -o PasswordAuthentication=no {flexbuff} "
             "\"bash -c 'find {p}/{r}  -mindepth {d}  -maxdepth {d} -type {t} | "
-            "xargs du -b -s --exclude lost+found/'\"".\
+            "xargs -r du -b -s --exclude lost+found/'\"".\
             format(
                 p=disk_pattern[flexbuff.machine_type],
                 r=recording_path,
@@ -188,6 +194,7 @@ def check_flexbuff_usage(flexbuff, usage, errors, recording_name,
             # or permission problems (1)
             raise RuntimeError("du failed with return code {r}".format(
                 r=returncode))
+        error = error.decode()
         for line in error.split('\n'):
             if line == "":
                 continue
@@ -196,6 +203,7 @@ def check_flexbuff_usage(flexbuff, usage, errors, recording_name,
                 errors[match.group("disk")].append(match.group("recording"))
 
     recording_regex = re.compile("^(?P<bytes>\d+)\s+(?P<recording>\S+)\s*$")
+    output = output.decode()
     for line in output.split('\n'):
         if line == "":
             continue
@@ -208,13 +216,12 @@ def check_flexbuff_usage(flexbuff, usage, errors, recording_name,
             else:
                 recording = os.path.split(match.group("recording"))[1]
                 split = recording.split("_")
-                (experiment, station, scan) = \
-                    (split[0].upper(), 
-                     split[1].capitalize(), 
-                     "_".join(split[2:])) \
-                     if len(split)>=3 \
-                     else (None, None, None)
-                usage[experiment][station][(scan, recording)] += size
+                if len(split) >= 3:
+                    (experiment, station, scan) = \
+                        (split[0].upper(), 
+                         split[1].capitalize(), 
+                         "_".join(split[2:]))
+                    usage[experiment][station][(scan, recording)] += size
         else:
             raise RuntimeError(
                 "Unexpected line on du output: '{line}'".format(line=line))
@@ -226,7 +233,7 @@ def check_flexbuff_availability(flexbuff, available):
                     "\"bash -c 'df -B 1 --total /mnt/disk*'\"".format(
                         flexbuff=flexbuff.machine \
                         if flexbuff.user is None else \
-                        "@".join([flexbuff.user, flexbuff.machine]))))
+                        "@".join([flexbuff.user, flexbuff.machine])))).decode()
     regex = re.compile("^total\s+(?P<total>\d+)\s+(?P<used>\d+)\s+"
                        "(?P<available>\d+)\s+\d+%")
     for line in output.split('\n'):
@@ -235,3 +242,73 @@ def check_flexbuff_availability(flexbuff, available):
             available[:] = [int(match.group("total")),
                             int(match.group("used")),
                             int(match.group("available"))]
+
+def get_flexbuff_nonvbs_files(check):
+    """
+    Check: a list of flexbuff machines to check
+    Returns a dict {flexbuff name: [(file path, size)]}
+    of the sizes of files on FlexBuff mount points which are not in VBS format.
+    """
+    ret = collections.defaultdict(list)
+    def insert_nonvbs_in(flexbuff, here):
+        here[:] = check_nonvbs_files(flexbuff)
+        
+    threads = []
+    for flexbuff in check:
+        thread = threading.Thread(
+            target=insert_nonvbs_in, 
+            args=(flexbuff, 
+                  ret[flexbuff.machine]))
+        thread.start()
+        threads.append(thread)
+
+    for t in threads:
+        t.join()
+
+    return ret
+
+def check_nonvbs_files(flexbuff):
+    """
+    Return a list of (file, size) tuples  not in VBS format in the 
+    FlexBuff mount points.
+    """
+    process = subprocess.Popen(
+        args=shlex.split(
+            "ssh -o PasswordAuthentication=no {flexbuff} "
+            "\"bash -c 'find {disk_pattern} -type f | "
+            "xargs -r du -b -s --exclude lost+found/'\"".format(
+                flexbuff=flexbuff.machine,
+                disk_pattern=disk_pattern[flexbuff.machine_type])),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE)
+    (output, error) = process.communicate()
+    returncode = process.wait()
+
+    if returncode != 0:
+        raise RuntimeError(error.decode())
+
+    du_line_re = re.compile("(?P<bytes>\d+)\s+(?P<path_name>\S.*)")
+    recording_re = re.compile(
+        "{disk_re_base}/"
+        "(?P<dir_name>[^_/]+(_[^_/]+){{2,}})/"
+        "(?P<file_name>[^_/]+(_[^_/]+){{2,}})\.\d{{8}}".\
+        format(disk_re_base=disk_re_base[flexbuff.machine_type]))
+    ret = []
+    output = output.deocde()
+    for line in output.split('\n'):
+        if line == "":
+            continue
+
+        du_line_match = du_line_re.match(line)
+        if not du_line_match:
+            raise RuntimeError(line)
+
+        path_name = du_line_match.group("path_name")
+        recording_match = recording_re.match(path_name)
+        if recording_match and (recording_match.group("dir_name") ==
+                                recording_match.group("file_name")):
+            continue
+
+        ret.append((path_name, int(du_line_match.group("bytes"))))
+
+    return ret

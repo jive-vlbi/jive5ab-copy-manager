@@ -1,9 +1,8 @@
-from import_proxy import Bunch, Hashable_Bunch
-from shared import format_bytes, wait_cursor, Text_Edit_Dialog
-import m5copy_widget
+from .import_proxy import Bunch, Hashable_Bunch
+from .shared import format_bytes, wait_cursor, Text_Edit_Dialog
+from . import m5copy_widget
 
-import PyQt4.QtGui as QtGui
-import PyQt4.QtCore as QtCore
+from PyQt5 import QtGui, QtCore, QtWidgets
 
 class Invalid_Selection_Exception(RuntimeError):
     pass
@@ -16,7 +15,7 @@ class Target_Thread(QtCore.QThread):
     def run(self):
         self.target()
 
-class Tree_Widget_Item(QtGui.QTreeWidgetItem):
+class Tree_Widget_Item(QtWidgets.QTreeWidgetItem):
     """
     In automatic column resizing mode (good), columns are close together (bad)
     I (Bob) couldn't find a way to set spacing, so instead this class will
@@ -37,7 +36,7 @@ class Tree_Widget_Item(QtGui.QTreeWidgetItem):
             new_text = text
         super(Tree_Widget_Item, self).setText(column, new_text)
 
-class Abstract_Machine_View(QtGui.QWidget):
+class Abstract_Machine_View(QtWidgets.QWidget):
     # how many characters for a size string
     bytes_print_size = 6
 
@@ -91,9 +90,9 @@ class Abstract_Machine_View(QtGui.QWidget):
         try:
             (to, recording_base) = self._get_m5copy_to()
         except Exception as e:
-             QtGui.QMessageBox.critical(
+            QtWidgets.QMessageBox.critical(
                 self, "Cannot copy", str(e))
-             return
+            return
            
         # make the base widget the parent, such that the dialog lives on and
         # is centered properly
@@ -115,11 +114,11 @@ class Abstract_Machine_View(QtGui.QWidget):
         try:
             selection = self._get_selection()
         except Invalid_Selection_Exception as e:
-            QtGui.QMessageBox.critical(self, "Invalid selection", str(e))
+            QtWidgets.QMessageBox.critical(self, "Invalid selection", str(e))
             return
         if not selection:
             return
-        with wait_cursor(QtGui.QApplication):
+        with wait_cursor(QtWidgets.QApplication):
             text = self._check_selection(selection)
         box = Text_Edit_Dialog(text, self)
         box.show()
@@ -129,7 +128,7 @@ class Abstract_Machine_View(QtGui.QWidget):
         try:
             selection = self._get_selection()
         except Invalid_Selection_Exception as e:
-            QtGui.QMessageBox.critical(self, "Invalid selection", str(e))
+            QtWidgets.QMessageBox.critical(self, "Invalid selection", str(e))
             return
 
         if not selection:
@@ -138,7 +137,7 @@ class Abstract_Machine_View(QtGui.QWidget):
         try:
             self._emit_copy(selection)
         except Exception as e:
-            QtGui.QMessageBox.critical(self, "Cannot copy", str(e))
+            QtWidgets.QMessageBox.critical(self, "Cannot copy", str(e))
 
 
     def _update_selection_label(self):
@@ -162,7 +161,7 @@ class Abstract_Machine_View(QtGui.QWidget):
         # disconnect update selection label and call manually, 
         # otherwise it might be called many times
         self.view.itemSelectionChanged.disconnect(self._update_selection_label)
-        for child in [item.child(i) for i in xrange(item.childCount())]:
+        for child in [item.child(i) for i in range(item.childCount())]:
             child.setSelected(False)
         self._update_selection_label()
         self.view.itemSelectionChanged.connect(self._update_selection_label)
@@ -181,15 +180,15 @@ class Abstract_Machine_View(QtGui.QWidget):
             # already loading
             return
             
-        load_item = QtGui.QTreeWidgetItem(root)
+        load_item = QtWidgets.QTreeWidgetItem(root)
         load_item.setFirstColumnSpanned(True)
         load_item.setText(0, "Loading")
 
         thread = Target_Thread(compute_func, self)
-        if isinstance(root, QtGui.QTreeWidget):
+        if isinstance(root, QtWidgets.QTreeWidget):
             remove_load_item = lambda: root.takeTopLevelItem(
                 root.topLevelItemCount() - 1)
-        elif isinstance(root, QtGui.QTreeWidgetItem):
+        elif isinstance(root, QtWidgets.QTreeWidgetItem):
             remove_load_item = lambda: root.removeChild(load_item)
         else:
             raise TypeError("root has to be a QTreeWidget or QTreeWidgetItem, "
@@ -209,7 +208,7 @@ class Abstract_Machine_View(QtGui.QWidget):
 
     def await_threads(self):
         for data in self.background_data.values():
-            print "waiting on background thread"
+            print("waiting on background thread")
             data._thread.wait()
     
     def __init__(self, parent=None):
@@ -217,12 +216,13 @@ class Abstract_Machine_View(QtGui.QWidget):
 
         self.background_data = {} # {root item: Bunch}
 
-        layout = QtGui.QVBoxLayout(self)
+        layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self._create_view_widget())
 
-        self.selection_layout = QtGui.QHBoxLayout()
-        self.selection_layout.addWidget(QtGui.QLabel("Selection size: ", self))
-        self.selection_label = QtGui.QLabel("no selection", self)
+        self.selection_layout = QtWidgets.QHBoxLayout()
+        self.selection_layout.addWidget(QtWidgets.QLabel("Selection size: ",
+                                                         self))
+        self.selection_label = QtWidgets.QLabel("no selection", self)
         self.selection_layout.addWidget(self.selection_label)
         self.selection_layout.addStretch(1)
         layout.addLayout(self.selection_layout)
@@ -230,17 +230,18 @@ class Abstract_Machine_View(QtGui.QWidget):
         add_spacing = Tree_Widget_Item.spaces * " "
         self.view.setHeaderLabels([add_spacing + l + add_spacing for l in \
                                    self.header_labels])
-        self.view.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+        self.view.setSelectionMode(
+            QtWidgets.QAbstractItemView.ExtendedSelection)
         self.view.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
-        self.view.header().setResizeMode(
-            QtGui.QHeaderView.ResizeToContents)
-        self.check_action = QtGui.QAction(self.check_text, self)
+        self.view.header().setSectionResizeMode(
+            QtWidgets.QHeaderView.ResizeToContents)
+        self.check_action = QtWidgets.QAction(self.check_text, self)
         self.check_action.triggered.connect(self._do_check)
         self.view.addAction(self.check_action)
-        self.copy_action = QtGui.QAction("Copy to ...", self)
+        self.copy_action = QtWidgets.QAction("Copy to ...", self)
         self.copy_action.triggered.connect(self._do_copy)
         self.view.addAction(self.copy_action)
-        self.clear_selection_action = QtGui.QAction("Clear selection", self)
+        self.clear_selection_action = QtWidgets.QAction("Clear selection", self)
         self.clear_selection_action.setShortcuts(
             QtGui.QKeySequence(QtCore.Qt.Key_Escape))
         self.clear_selection_action.setShortcutContext(

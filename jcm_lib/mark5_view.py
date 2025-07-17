@@ -1,16 +1,16 @@
-from abstract_machine_view import (Invalid_Selection_Exception, 
+from .abstract_machine_view import (Invalid_Selection_Exception, 
                                    Abstract_Machine_View, Tree_Widget_Item)
 
-from import_proxy import execute_query, send_query
-from shared import format_bytes
+from .import_proxy import execute_query, send_query
+from .shared import format_bytes
 
-import PyQt4.QtGui as QtGui
-import PyQt4.QtCore as QtCore
+from PyQt5 import QtWidgets, QtCore
 
 import socket
 import contextlib
 import time
 import collections
+import itertools
 
 class Mark5_View(Abstract_Machine_View):
     header_labels = ["Bank", "VSN", "#scan", "Recording", "Size"]
@@ -56,7 +56,9 @@ class Mark5_View(Abstract_Machine_View):
 
     def _get_m5copy_to(self):
         indices = self.view.selectedIndexes()
-        items = list(set(self.view.itemFromIndex(index) for index in indices))
+        # get unique items from indices
+        items, _ = zip(*itertools.groupby(
+            self.view.itemFromIndex(index) for index in indices))
         if (len(items) != 1) or \
            (items[0].childIndicatorPolicy() != \
            Tree_Widget_Item.ShowIndicator):
@@ -75,7 +77,7 @@ class Mark5_View(Abstract_Machine_View):
                     for (bank, (number, scan)) in selection])
 
     def _create_view_widget(self):
-        self.view = QtGui.QTreeWidget(self)
+        self.view = QtWidgets.QTreeWidget(self)
         self.banks = {bank : Tree_Widget_Item(self.view) \
                       for bank in ["A", "B"]}
         self.recording_sizes = {bank : {} for bank in self.banks.keys()}
@@ -153,7 +155,7 @@ class Mark5_View(Abstract_Machine_View):
 
             data.scans = []
             seen = set()
-            for scan_index in xrange(scans):
+            for scan_index in range(scans):
                 execute_query(s, "scan_set={i}".format(i=scan_index+1), 
                               ["0"])
                 reply = execute_query(s, "scan_set?", ["0"])

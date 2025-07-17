@@ -1,12 +1,11 @@
-from shared import get_flexbuff_meta_data, check_flexbuff, format_bytes
-from import_proxy import execute_query, send_query, Hashable_Bunch
-from abstract_machine_view import (Invalid_Selection_Exception, 
+from .shared import get_flexbuff_meta_data, check_flexbuff, format_bytes
+from .import_proxy import execute_query, send_query, Hashable_Bunch
+from .abstract_machine_view import (Invalid_Selection_Exception, 
                                    Abstract_Machine_View, Tree_Widget_Item)
-import rename_widget
+from . import rename_widget
 
 
-import PyQt4.QtGui as QtGui
-import PyQt4.QtCore as QtCore
+from PyQt5 import QtWidgets, QtCore
 
 import collections
 import contextlib
@@ -62,21 +61,21 @@ class Flexbuff_View(Abstract_Machine_View):
                          self.data[experiment][station][scan]))
             else:
                 flexbuff_recordings.append(
-                    (self.flexbuffs.values()[0],
+                    (next(iter(self.flexbuffs.values())),
                      self.data[experiment][station][scan]))
 
         def handle_station_item(experiment, station_item):
             station = str(station_item.text(
                 self.header_labels.index("Station")))
             for scan_item in [station_item.child(i) for i in \
-                              xrange(station_item.childCount())]:
+                              range(station_item.childCount())]:
                 handle_scan_item(experiment, station, scan_item)
 
         def handle_experiment_item(experiment_item):
             experiment = str(experiment_item.text(self.header_labels.index(
                 "Experiment")))
             for station_item in [experiment_item.child(i) for i in \
-                                 xrange(experiment_item.childCount())]:
+                                 range(experiment_item.childCount())]:
                 handle_station_item(experiment, station_item)
 
         for _, index in sorted(row_index.items()):
@@ -122,7 +121,7 @@ class Flexbuff_View(Abstract_Machine_View):
                              [chunk_index]))
                 else:
                     flexbuff_recordings.append(
-                        (self.flexbuffs.values()[0],
+                        (next(iter(self.flexbuffs.values())),
                          self.chunks[experiment][station][scan][chunk_index]))
             else:
                 raise RuntimeError("Invalid level {l}.".format(l=level))
@@ -151,13 +150,13 @@ class Flexbuff_View(Abstract_Machine_View):
 
     def _emit_copy(self, selection):
         if any([data.recording.startswith("/") for (_, data) in selection]):
-            QtGui.QMessageBox.critical(
+            QtWidgets.QMessageBox.critical(
                 self, "Cannot copy", 
                 "Cannot copy file chunks from FlexBuff view.")
             return
             
         if len(selection) > len(set(data for (_, data) in selection)):
-            QtGui.QMessageBox.critical(
+            QtWidgets.QMessageBox.critical(
                 self, "Cannot copy", "Some recordings are present on multiple "
                 "FlexBuffs, reduce FlexBuff source selection first.")
             return
@@ -182,7 +181,7 @@ class Flexbuff_View(Abstract_Machine_View):
             raise Invalid_Selection_Exception("Selection on the target "
                 "FlexBuff has to be empty as copying to a specific "
                 "destination is not supported.")
-        flexbuff = self.flexbuffs.values()[0]
+        flexbuff = next(iter(self.flexbuffs.values()))
         data_format = "mk6" if self.mark6_format.isChecked() else "vbs"
         return (flexbuff.machine, "{data}://{host}:{port}:{data_ip}/{type_}/".
 
@@ -215,7 +214,7 @@ class Flexbuff_View(Abstract_Machine_View):
                                     self.bytes_print_size)
             except IndexError:
                 size = "?"
-            self.disk_usage_layout.addWidget(QtGui.QLabel(
+            self.disk_usage_layout.addWidget(QtWidgets.QLabel(
                 "{text}: {n}".format(text=text, n=size)))
 
         policy = Tree_Widget_Item.ShowIndicator \
@@ -284,7 +283,8 @@ class Flexbuff_View(Abstract_Machine_View):
 
         is_mark6_data_format = self.mark6_format.isChecked()
         (data.usage, data.available, data.errors) = \
-            get_flexbuff_meta_data(self.flexbuffs.values(), is_mark6_data_format)
+            get_flexbuff_meta_data(list(self.flexbuffs.values()),
+                                   is_mark6_data_format)
 
         # {experiment : {station : {(scan, recording) : set(flexbuffs)}}}
         data.presence = collections.defaultdict(
@@ -306,14 +306,14 @@ class Flexbuff_View(Abstract_Machine_View):
                             Hashable_Bunch(recording=recording, size=size) 
 
     def _create_view_widget(self):
-        widget = QtGui.QWidget(self)
-        layout = QtGui.QVBoxLayout(widget)
-        disk_usage_widget = QtGui.QGroupBox("Disk usage", widget)
-        self.disk_usage_layout = QtGui.QHBoxLayout(disk_usage_widget)
-        self.disk_usage_layout.addWidget(QtGui.QLabel("Loading", self))
+        widget = QtWidgets.QWidget(self)
+        layout = QtWidgets.QVBoxLayout(widget)
+        disk_usage_widget = QtWidgets.QGroupBox("Disk usage", widget)
+        self.disk_usage_layout = QtWidgets.QHBoxLayout(disk_usage_widget)
+        self.disk_usage_layout.addWidget(QtWidgets.QLabel("Loading", self))
         layout.addWidget(disk_usage_widget)
 
-        self.view = QtGui.QTreeWidget(widget)
+        self.view = QtWidgets.QTreeWidget(widget)
         layout.addWidget(self.view)
 
         return widget
@@ -339,11 +339,11 @@ class Flexbuff_View(Abstract_Machine_View):
             policy = Tree_Widget_Item.DontShowIndicator
 
         for experiment_item in [self.view.topLevelItem(i) for i in \
-                                xrange(self.view.topLevelItemCount())]:
+                                range(self.view.topLevelItemCount())]:
             for station_item in [experiment_item.child(i) for i in \
-                                 xrange(experiment_item.childCount())]:
+                                 range(experiment_item.childCount())]:
                 for scan_item in [station_item.child(i) for i in \
-                              xrange(station_item.childCount())]:
+                              range(station_item.childCount())]:
                     if not visible:
                         scan_item.setExpanded(False)
                     scan_item.setChildIndicatorPolicy(policy)
@@ -359,20 +359,20 @@ class Flexbuff_View(Abstract_Machine_View):
             return
         
         scan_item = self.view.itemFromIndex(index)
-        if scan_item in self.expanded:
-            # already scanned for the chunks
-            return
-
         scan = str(scan_item.text(self.header_labels.index("Scan")))
         station_item = scan_item.parent()
         station = str(station_item.text(self.header_labels.index("Station")))
         experiment = str(station_item.parent().text(
             self.header_labels.index("Experiment")))
+        if (experiment, station, scan) in self.expanded:
+            # already scanned for the chunks
+            return
+
         if len(self.flexbuffs) > 1:
             machines = str(scan_item.text(
                 self.header_labels.index("FlexBuff"))).split(", ")
         else:
-            machines = self.flexbuffs.keys()
+            machines = list(self.flexbuffs.keys())
         for flexbuff in [self.flexbuffs[machine] for machine in machines]:
             chunks = {}
             errors = {}
@@ -414,7 +414,7 @@ class Flexbuff_View(Abstract_Machine_View):
                         item.setText(self.header_labels.index("FlexBuff"),
                         flexbuff.machine)
 
-        self.expanded.add(scan_item)
+        self.expanded.add((experiment, station, scan))
         
     def _get_m5copy_options(self):
         return super(Flexbuff_View, self)._get_m5copy_options() + \
@@ -433,7 +433,8 @@ class Flexbuff_View(Abstract_Machine_View):
         dialog.show()
         dialog.raise_()
 
-    def __init__(self, (flexbuffs, local), parent=None):
+    def __init__(self, flexbuffs_locals, parent=None):
+        (flexbuffs, local) = flexbuffs_locals
         if not flexbuffs:
             raise RuntimeError("Empty set of FlexBuffs.")
         self.flexbuffs = {flexbuff.machine : flexbuff for flexbuff in flexbuffs}
@@ -441,12 +442,12 @@ class Flexbuff_View(Abstract_Machine_View):
 
         super(Flexbuff_View, self).__init__(parent)
 
-        self.mark6_format = QtGui.QCheckBox("Mark6 format", self)
+        self.mark6_format = QtWidgets.QCheckBox("Mark6 format", self)
         self.selection_layout.addWidget(self.mark6_format)
         self.mark6_format.clicked.connect(self._set_data_format)
         self.mark6_format.setEnabled(False)
 
-        self.show_file_chunks = QtGui.QCheckBox("Show file chunks", self)
+        self.show_file_chunks = QtWidgets.QCheckBox("Show file chunks", self)
         self.selection_layout.addWidget(self.show_file_chunks)
         self.show_file_chunks.clicked.connect(self._set_chunk_visibility)
 
@@ -460,7 +461,7 @@ class Flexbuff_View(Abstract_Machine_View):
         if len(self.flexbuffs) == 1:
             self.view.hideColumn(self.header_labels.index("FlexBuff"))
 
-        self.rename_action = QtGui.QAction("Rename", self)
+        self.rename_action = QtWidgets.QAction("Rename", self)
         self.rename_action.triggered.connect(self._rename)
         self.view.addAction(self.rename_action)
 

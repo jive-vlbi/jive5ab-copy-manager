@@ -7,7 +7,7 @@ It includes a wrapper around m5copy.
 
 <h2>Installation</h2>
 <ul>
-<li>The software requirements are python 2.7 and the PyQt4 (Debian package python-qt4).  
+<li>The software requirements are python 3 and the PyQt5 (Debian package python-qt5).  
 <li>Download the latest version: <a href="https://github.com/jive-vlbi/jive5ab-copy-manager/archive/master.zip">jive5ab_copy_manager-master.zip</a>.
 <li>Extract the contents of the file, the executable is jcm.py
 </ul>

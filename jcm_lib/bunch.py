@@ -16,11 +16,6 @@ class Bunch(object):
     def __repr__(self):
         return repr(self.__dict__)
 
-    def __cmp__(self, other):
-        if not isinstance(other, Bunch):
-            return cmp(type(self), type(other))
-        return cmp(self.__dict__, other.__dict__)
-
     def __hash__(self):
         raise TypeError("unhashable type: '{t}'".format(t = type(self)))
 

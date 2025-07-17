@@ -1,24 +1,23 @@
-import mark5_view
-import flexbuff_view
-import file_view
-import import_proxy
-from import_proxy import Bunch, Hashable_Bunch
+from . import mark5_view
+from . import flexbuff_view
+from . import file_view
+from . import import_proxy
+from .import_proxy import Bunch, Hashable_Bunch
 
-import PyQt4.QtGui as QtGui
-import PyQt4.QtCore as QtCore
+from PyQt5 import QtWidgets, QtCore
 
 import collections
 import traceback
 import logging
 import copy
 
-class Machine_Widget(QtGui.QWidget):
+class Machine_Widget(QtWidgets.QWidget):
     copy_from = QtCore.pyqtSignal(str, list)
     def copy_to(self, from_, recordings):
         if hasattr(self.view, "copy_to"):
             self.view.copy_to(from_, recordings)
         else:
-            QtGui.QMessageBox.critical(self, "Cannot copy", "No suitable "
+            QtWidgets.QMessageBox.critical(self, "Cannot copy", "No suitable "
                                        "destination to copy to selected")
 
     def _initialize_machine_types(self):
@@ -58,7 +57,7 @@ class Machine_Widget(QtGui.QWidget):
             [("{name} ({stations})".format(name=fb.machine, stations=", ".join(
                 sorted(stations))),
               ([fb], False)) 
-             for fb, stations in grouped_remote_flexbuffs.items()] +
+             for fb, stations in list(grouped_remote_flexbuffs.items())] +
             # remote stations, group flexbuffs by station if multiple flexbuff
             [("{station} ({machines})".format(
                 station=station, 
@@ -72,39 +71,47 @@ class Machine_Widget(QtGui.QWidget):
             for fm in import_proxy.get_file_machines())
 
     def _parse_host(self, host, machine_type):
-        machine = host.strip()
-        # machine: [user@]<control_ip/host>[:port[:data_ip]]
 
-        at_index = machine.find("@")
-        if at_index != -1:
-            user = machine[:at_index]
-            machine = machine[at_index+1:]
-        else:
-            user = None
-        
-        colon_index = machine.rfind(":")
-        if colon_index != -1:
-            last = machine[colon_index+1:]
-            machine = machine[:colon_index]
-            colon_index = machine.rfind(":")
-            if colon_index == -1:
-                port = int(last)
-                data_ip = machine
+        def parse_machine(host):
+            machine = host.strip()
+            # machine: [user@]<control_ip/host>[:port[:data_ip]]
+            at_index = machine.find("@")
+            if at_index != -1:
+                user = machine[:at_index]
+                machine = machine[at_index+1:]
             else:
-                data_ip = last
-                port = int(machine[colon_index+1:])
+                user = None
+
+            colon_index = machine.rfind(":")
+            if colon_index != -1:
+                last = machine[colon_index+1:]
                 machine = machine[:colon_index]
-        else:
-            port = 2620
-            data_ip = machine
+                colon_index = machine.rfind(":")
+                if colon_index == -1:
+                    port = int(last)
+                    data_ip = machine
+                else:
+                    data_ip = last
+                    port = int(machine[colon_index+1:])
+                    machine = machine[:colon_index]
+            else:
+                port = 2620
+                data_ip = machine
+
+            return user, machine, port, data_ip
+
 
 
         if machine_type == "Mark5":
+            user, machine, port, data_ip = parse_machine(host)
             self.machine_types[machine_type][host] = Hashable_Bunch(
                 control_ip=machine, 
                 port=port, 
                 data_ip=data_ip)
         elif machine_type == "FlexBuff":
+            machine_params = []
+            for single_host in host.split(','):
+                machine_params.append(parse_machine(single_host))
             self.machine_types[machine_type][host] = (
                 [Hashable_Bunch(
                     user=user, 
@@ -112,9 +119,11 @@ class Machine_Widget(QtGui.QWidget):
                     port=port, 
                     control_ip=machine,
                     data_ip=data_ip, 
-                    machine_type="flexbuff")],
+                    machine_type="flexbuff")
+                 for user, machine, port, data_ip in machine_params],
                 False) # assume non-local flexbuff
         elif machine_type == "File":
+            user, machine, port, data_ip = parse_machine(host)
             self.machine_types[machine_type][host] = Hashable_Bunch(
                 user=user, 
                 control_ip=machine,
@@ -124,7 +133,7 @@ class Machine_Widget(QtGui.QWidget):
     def _machine_type_selected(self, machine):
         machine = str(machine)
         self.host.clear()
-        self.host.addItems([""] + self.machine_types[machine].keys())
+        self.host.addItems([""] + list(self.machine_types[machine].keys()))
         if machine == "File":
             self.file_widget.show()
         else:
@@ -152,7 +161,7 @@ class Machine_Widget(QtGui.QWidget):
         w = self._create_machine_type_widget(host)
         if not w:
             # failed to create widget, create an empty one
-            w = QtGui.QWidget(self)
+            w = QtWidgets.QWidget(self)
         else:
             w.copy_from.connect(self.copy_from)
             self.widget_references.append(w)
@@ -167,9 +176,10 @@ class Machine_Widget(QtGui.QWidget):
             try:
                 self._parse_host(host, machine_type)
             except Exception as e:
-                QtGui.QMessageBox.critical(self, "Cannot parse host", 
-                "Cannot parse host '{host}', exception: {e}".format(
-                    host=host, e=e))
+                print("exception 1", e)
+                QtWidgets.QMessageBox.critical(self, "Cannot parse host", 
+                    "Cannot parse host '{host}', exception: {e}".format(
+                        host=host, e=e))
                 self.host.removeItem(self.host.findText(host))
                 return None
             args = self.machine_types[machine_type][host]
@@ -183,7 +193,7 @@ class Machine_Widget(QtGui.QWidget):
             elif machine == "File":
                 path = str(self.file_selection.text())
                 if len(path) == 0:
-                    QtGui.QMessageBox.critical(self, "No path selected", 
+                    QtWidgets.QMessageBox.critical(self, "No path selected", 
                         "No root path selected for file view on host {host}".\
                         format(host=host))
                 instance_args = Bunch(args)
@@ -196,40 +206,40 @@ class Machine_Widget(QtGui.QWidget):
 
     def _create_selection_widget(self):
         self._initialize_machine_types()
-        widget = QtGui.QGroupBox("Selection", self)
-        layout = QtGui.QHBoxLayout(widget)
-        layout.addWidget(QtGui.QLabel("Type", self))
-        self.machine_type = QtGui.QComboBox(self)
-        items = self.machine_types.keys()
+        widget = QtWidgets.QGroupBox("Selection", self)
+        layout = QtWidgets.QHBoxLayout(widget)
+        layout.addWidget(QtWidgets.QLabel("Type", self))
+        self.machine_type = QtWidgets.QComboBox(self)
+        items = list(self.machine_types.keys())
         self.machine_type.addItems(items)
         self.machine_type.setCurrentIndex(items.index("FlexBuff"))
         layout.addWidget(self.machine_type)
         layout.addStretch(1)
-        reload_button = QtGui.QPushButton("Reload", self)
+        reload_button = QtWidgets.QPushButton("Reload", self)
         layout.addWidget(reload_button)
 
-        self.file_widget = QtGui.QWidget(self)
-        file_layout = QtGui.QHBoxLayout(self.file_widget)
-        file_layout.addWidget(QtGui.QLabel("Root path", self.file_widget))
-        self.file_selection = QtGui.QLineEdit("/", self.file_widget)
+        self.file_widget = QtWidgets.QWidget(self)
+        file_layout = QtWidgets.QHBoxLayout(self.file_widget)
+        file_layout.addWidget(QtWidgets.QLabel("Root path", self.file_widget))
+        self.file_selection = QtWidgets.QLineEdit("/", self.file_widget)
         file_layout.addWidget(self.file_selection)
         # use a much higher stretch than the stretch before reload
         layout.addWidget(self.file_widget, 1000) 
 
-        host_widget = QtGui.QWidget(self)
-        host_layout = QtGui.QHBoxLayout(host_widget)
-        host_layout.addWidget(QtGui.QLabel("Host", host_widget))
-        self.host = QtGui.QComboBox(host_widget)
+        host_widget = QtWidgets.QWidget(self)
+        host_layout = QtWidgets.QHBoxLayout(host_widget)
+        host_layout.addWidget(QtWidgets.QLabel("Host", host_widget))
+        self.host = QtWidgets.QComboBox(host_widget)
         self.host.setEditable(True)
-        self.host.setInsertPolicy(QtGui.QComboBox.InsertAtBottom)
+        self.host.setInsertPolicy(QtWidgets.QComboBox.InsertAtBottom)
 
         host_layout.addWidget(self.host)
         layout.addWidget(host_widget)
         
-        self.machine_type.activated[QtCore.QString].\
+        self.machine_type.activated[str].\
             connect(self._machine_type_selected)
         reload_button.clicked.connect(self._reload_clicked)
-        self.host.activated[QtCore.QString].connect(self._host_selected)
+        self.host.activated[str].connect(self._host_selected)
         self._machine_type_selected(self.machine_type.currentText())
         return widget
 
@@ -238,11 +248,11 @@ class Machine_Widget(QtGui.QWidget):
 
         self._initialize_machine_types()
 
-        self.master_layout = QtGui.QVBoxLayout(self)
+        self.master_layout = QtWidgets.QVBoxLayout(self)
         selection_widget = self._create_selection_widget()
         self.master_layout.addWidget(selection_widget)
 
-        self.view = QtGui.QWidget(self)
+        self.view = QtWidgets.QWidget(self)
         self.master_layout.addWidget(self.view)
 
         # the machine widget can have thread to collect information

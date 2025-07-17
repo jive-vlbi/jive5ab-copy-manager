@@ -1,6 +1,6 @@
-from command_widget import Command_Progress_Widget, Command_Dialog
+from .command_widget import Command_Progress_Widget, Command_Dialog
 
-import PyQt4.QtGui as QtGui
+from PyQt5 import QtWidgets
 
 import re
 
@@ -11,10 +11,10 @@ class M5copy_Progress_Widget(Command_Progress_Widget):
     def __init__(self, total_commands, parent=None):
         super(M5copy_Progress_Widget, self).__init__(total_commands, parent)
         self.label_layout.addStretch(1)
-        self.data_rate_label = QtGui.QLabel(self)
+        self.data_rate_label = QtWidgets.QLabel(self)
         self.label_layout.addWidget(self.data_rate_label)
         
-        self.progress_bar = QtGui.QProgressBar(self)
+        self.progress_bar = QtWidgets.QProgressBar(self)
         self.layout.addWidget(self.progress_bar)
         self.progress_bar.setRange(0, 100*100)
 
@@ -64,10 +64,10 @@ class M5copy_Dialog(Command_Dialog):
                         str(self.replace_format.text()).\
                             format(**match.groupdict()).lower()
                     except Exception as e:
-                        print "warning, failed to rename recording:", e
+                        print("warning, failed to rename recording:", e)
                 else:
-                    print "warning, recording '{r}' failed to match regular "\
-                        "expression".format(r=recording[1])
+                    print("warning, recording '{r}' failed to match regular "
+                          "expression".format(r=recording[1]))
             
             commands.append("m5copy {udt}{extra} {src} {dest}".format(
                 udt=udt,
@@ -77,25 +77,25 @@ class M5copy_Dialog(Command_Dialog):
         return commands
 
     def add_config_widgets(self, master_layout):
-        network_layout = QtGui.QHBoxLayout()
-        protocol_widget = QtGui.QGroupBox("Protocol", self)
-        protocol_layout = QtGui.QVBoxLayout(protocol_widget)
-        self.protocol_buttons = QtGui.QButtonGroup(protocol_widget)
-        tcp_button = QtGui.QRadioButton("TCP", protocol_widget)
+        network_layout = QtWidgets.QHBoxLayout()
+        protocol_widget = QtWidgets.QGroupBox("Protocol", self)
+        protocol_layout = QtWidgets.QVBoxLayout(protocol_widget)
+        self.protocol_buttons = QtWidgets.QButtonGroup(protocol_widget)
+        tcp_button = QtWidgets.QRadioButton("TCP", protocol_widget)
         protocol_layout.addWidget(tcp_button)
         self.protocol_buttons.addButton(tcp_button)
-        udt_button = QtGui.QRadioButton("UDT", protocol_widget)
+        udt_button = QtWidgets.QRadioButton("UDT", protocol_widget)
         protocol_layout.addWidget(udt_button)
         self.protocol_buttons.addButton(udt_button)
         network_layout.addWidget(protocol_widget)
         
-        self.udt_widget = QtGui.QGroupBox("UDT", self)
-        udt_layout = QtGui.QGridLayout(self.udt_widget)
-        udt_layout.addWidget(QtGui.QLabel("Rate (Mbps)", self.udt_widget), 0, 0)
-        udt_layout.addWidget(QtGui.QLabel("MTU", self.udt_widget), 1, 0)
-        self.rate_widget = QtGui.QLineEdit(self.udt_widget)
+        self.udt_widget = QtWidgets.QGroupBox("UDT", self)
+        udt_layout = QtWidgets.QGridLayout(self.udt_widget)
+        udt_layout.addWidget(QtWidgets.QLabel("Rate (Mbps)", self.udt_widget), 0, 0)
+        udt_layout.addWidget(QtWidgets.QLabel("MTU", self.udt_widget), 1, 0)
+        self.rate_widget = QtWidgets.QLineEdit(self.udt_widget)
         udt_layout.addWidget(self.rate_widget, 0, 1)
-        self.mtu_widget = QtGui.QLineEdit(self.udt_widget)
+        self.mtu_widget = QtWidgets.QLineEdit(self.udt_widget)
         self.mtu_widget.setText("9000")
         udt_layout.addWidget(self.mtu_widget, 1, 1)
         network_layout.addWidget(self.udt_widget)
@@ -106,21 +106,21 @@ class M5copy_Dialog(Command_Dialog):
 
         master_layout.addLayout(network_layout)
 
-        master_layout.addWidget(QtGui.QLabel("Extra options", self))
-        self.extra_widget = QtGui.QLineEdit(self)
+        master_layout.addWidget(QtWidgets.QLabel("Extra options", self))
+        self.extra_widget = QtWidgets.QLineEdit(self)
         master_layout.addWidget(self.extra_widget)
         self.extra_widget.setText(
             self.options if self.options is not None else "")
         
-        replace_layout = QtGui.QHBoxLayout()
-        self.do_replace = QtGui.QCheckBox("Rename recording", self)
+        replace_layout = QtWidgets.QHBoxLayout()
+        self.do_replace = QtWidgets.QCheckBox("Rename recording", self)
         replace_layout.addWidget(self.do_replace)
-        self.format_regex = QtGui.QLineEdit(self)
+        self.format_regex = QtWidgets.QLineEdit(self)
         self.format_regex.setText(
             "(.*/)?_?(?P<exp>[a-zA-Z0-9]+)_(?P<st>[a-zA-Z0-9]+)_"\
             "(?P<scan>[a-zA-Z0-9]+).*")
         replace_layout.addWidget(self.format_regex)
-        self.replace_format = QtGui.QLineEdit(self)
+        self.replace_format = QtWidgets.QLineEdit(self)
         self.replace_format.setText("{exp}_{st}_{scan}")
         replace_layout.addWidget(self.replace_format)
         master_layout.addLayout(replace_layout)

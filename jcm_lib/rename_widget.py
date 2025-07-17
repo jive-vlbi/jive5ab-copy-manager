@@ -1,6 +1,6 @@
-from command_widget import Command_Progress_Widget, Command_Dialog
+from .command_widget import Command_Progress_Widget, Command_Dialog
 
-import PyQt4.QtGui as QtGui
+from PyQt5 import QtWidgets
 
 import re
 
@@ -29,13 +29,13 @@ class Rename_Dialog(Command_Dialog):
         return commands
 
     def add_config_widgets(self, master_layout):
-        replace_layout = QtGui.QHBoxLayout()
-        self.format_regex = QtGui.QLineEdit(self)
+        replace_layout = QtWidgets.QHBoxLayout()
+        self.format_regex = QtWidgets.QLineEdit(self)
         self.format_regex.setText(
             "(?P<exp>[a-zA-Z0-9]+)_(?P<st>[a-zA-Z0-9]+)_"
             "(?P<scan>[a-zA-Z0-9]+).*")
         replace_layout.addWidget(self.format_regex)
-        self.replace_format = QtGui.QLineEdit(self)
+        self.replace_format = QtWidgets.QLineEdit(self)
         self.replace_format.setText("{exp}_{st}_{scan}")
         replace_layout.addWidget(self.replace_format)
         master_layout.addLayout(replace_layout)
